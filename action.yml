@@ -1,1 +1,44 @@
+name: "Template Sonar Check Status"
 
+inputs:
+  sonar_url:
+    description: "SonarQube Url"
+    required: true
+  sonar_token:
+    description: "Token Project Sonar"
+    required: true
+  sonar_projetckey:
+    description: "Name Project"
+    required: true
+  github-token:
+    description: "GitHub Token"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Checking Sonar
+      id: check
+      shell: bash
+      run: |
+          project_status="$(curl -s -u ${{ inputs.sonar_token }}: -G --data-urlencode --data-urlencode \
+          ${{ inputs.sonar_url  }}/api/qualitygates/project_status?projectKey=${{ inputs.sonar_projetckey }} | jq '.projectStatus.conditions[] | select(.status=="ERROR")')"
+          project_status="${project_status//'%'/'%25'}"
+          project_status="${project_status//$'\n'/'%0A'}"
+          project_status="${project_status//$'\r'/'%0D'}"
+          echo "::set-output name=quality_check::$project_status"
+          
+    - name: PR Comment
+      uses: actions/github-script@v2
+      with:
+        github-token: ${{inputs.github-token}}
+        script: |
+          var SONAR_CHECK = process.env.SONAR_CHECK;
+          github.issues.createComment({
+            issue_number: ${{ github.event.number }},
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `👋 Ola se voce esta vendo esse erro :warning: ${SONAR_TEST}: 
+            Tem algo errado na sua PR verifique o SonarQube para mais detalhes :warning:`
+          })
+      env:
+        SONAR_CHECK: ${{ steps.check.outputs.quality_check }}
